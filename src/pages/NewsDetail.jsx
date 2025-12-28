@@ -2,19 +2,35 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
-import { Calendar, User, ArrowLeft, Eye } from 'lucide-react'
+import { Calendar, User, ArrowLeft, Eye, Download, FileText } from 'lucide-react'
 import { newsAPI } from '../services/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import toast from 'react-hot-toast'
+
+const getFileIcon = (fileType) => {
+  const type = fileType?.toUpperCase()
+  if (type === 'PDF') return '📄'
+  if (type === 'DOC' || type === 'DOCX') return '📝'
+  if (type === 'XLS' || type === 'XLSX') return '📊'
+  return '📎'
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
 
 export default function NewsDetail() {
   const { id } = useParams()
   const { t, i18n } = useTranslation()
   const [news, setNews] = useState(null)
+  const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadNews()
+    loadDocuments()
   }, [id])
 
   const loadNews = async () => {
@@ -29,12 +45,29 @@ export default function NewsDetail() {
     }
   }
 
+  const loadDocuments = async () => {
+    try {
+      const { data } = await newsAPI.getDocuments(id)
+      setDocuments(data || [])
+    } catch (error) {
+      console.error('Ошибка загрузки документов:', error)
+      setDocuments([])
+    }
+  }
+
   const getLocalizedText = (field) => {
     if (!news) return ''
     const lang = i18n.language
     if (lang === 'kk') return news[`${field}Kk`] || news[`${field}Ru`]
     if (lang === 'en') return news[`${field}En`] || news[`${field}Ru`]
     return news[`${field}Ru`]
+  }
+
+  const getLocalizedDocTitle = (doc) => {
+    const lang = i18n.language
+    if (lang === 'kk') return doc.titleKk || doc.titleRu || doc.fileName
+    if (lang === 'en') return doc.titleEn || doc.titleRu || doc.fileName
+    return doc.titleRu || doc.fileName
   }
 
   const formatDate = (dateString) => {
@@ -120,9 +153,53 @@ export default function NewsDetail() {
             </h1>
 
             <div 
-              className="prose prose-lg max-w-none text-gray-700 leading-relaxed"
+              className="prose prose-lg max-w-none text-gray-700 leading-relaxed mb-8"
               dangerouslySetInnerHTML={{ __html: getLocalizedText('content').replace(/\n/g, '<br />') }}
             />
+
+            {/* НОВЫЙ БЛОК: Прикрепленные документы */}
+            {documents.length > 0 && (
+              <div className="mt-8 pt-8 border-t-2 border-gray-100">
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-primary-600" />
+                  {i18n.language === 'ru' ? 'Прикрепленные документы' : 
+                   i18n.language === 'kk' ? 'Тіркелген құжаттар' : 
+                   'Attached Documents'}
+                </h2>
+                <div className="space-y-3">
+                  {documents.map((doc) => (
+                    <a
+                      key={doc.id}
+                      href={doc.fileUrl}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl hover:shadow-lg transition-all group border-2 border-transparent hover:border-blue-200"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="text-4xl">{getFileIcon(doc.fileType)}</div>
+                        <div>
+                          <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {getLocalizedDocTitle(doc)}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {doc.fileType} • {formatFileSize(doc.fileSize)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg group-hover:bg-blue-600 transition-colors">
+                        <Download className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" />
+                        <span className="font-medium text-blue-600 group-hover:text-white transition-colors">
+                          {i18n.language === 'ru' ? 'Скачать' : 
+                           i18n.language === 'kk' ? 'Жүктеу' : 
+                           'Download'}
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </motion.article>
       </div>

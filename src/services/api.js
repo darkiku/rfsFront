@@ -40,9 +40,7 @@ api.interceptors.response.use(
     const originalRequest = error.config
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // КРИТИЧЕСКАЯ ПРОВЕРКА: Если уже идет refresh, НЕ ДЕЛАЕМ второй запрос!
       if (isRefreshing) {
-        // Добавляем запрос в очередь и ждем завершения текущего refresh
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         })
@@ -79,10 +77,8 @@ api.interceptors.response.use(
           localStorage.setItem('refreshToken', data.refreshToken)
         }
         
-        // Обрабатываем все запросы из очереди
         processQueue(null, data.accessToken)
         
-        // Повторяем оригинальный запрос
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
         
         return api(originalRequest)
@@ -90,15 +86,12 @@ api.interceptors.response.use(
       } catch (refreshError) {
         console.error('❌ Token refresh failed:', refreshError)
         
-        // Очищаем очередь с ошибкой
         processQueue(refreshError, null)
         
-        // Очищаем хранилище
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
         localStorage.removeItem('user')
         
-        // Редирект на логин
         if (window.location.pathname.startsWith('/admin')) {
           window.location.href = '/admin/login'
         }
@@ -106,7 +99,6 @@ api.interceptors.response.use(
         return Promise.reject(refreshError)
         
       } finally {
-        // ВАЖНО: Сбрасываем флаг после завершения
         isRefreshing = false
       }
     }
@@ -129,6 +121,11 @@ export const newsAPI = {
   create: (data) => api.post('/news', data),
   update: (id, data) => api.put(`/news/${id}`, data),
   delete: (id) => api.delete(`/news/${id}`),
+  
+  // 📎 НОВЫЕ МЕТОДЫ ДЛЯ ДОКУМЕНТОВ
+  getDocuments: (newsId) => api.get(`/news/${newsId}/documents`),
+  addDocument: (newsId, documentData) => api.post(`/news/${newsId}/documents`, documentData),
+  deleteDocument: (newsId, documentId) => api.delete(`/news/${newsId}/documents/${documentId}`)
 }
 
 export const servicesAPI = {
@@ -225,6 +222,19 @@ export const uploadAPI = {
       },
     })
   },
+  
+  // 📄 НОВЫЙ МЕТОД ДЛЯ ЗАГРУЗКИ ДОКУМЕНТОВ
+  uploadDocument: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/upload/document', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+  
+  deleteDocument: (filename) => api.delete('/upload/document', { params: { filename } })
 }
 
 export default api
